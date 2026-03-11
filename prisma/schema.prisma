@@ -1,3 +1,75 @@
+enum Rarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum ItemType {
+  CHEST
+  COLOR_DROP
+  COLOR
+}
+
+model User {
+  id         String   @id @default(uuid())
+  coins      Int      @default(0)
+
+  progressColor   String  @default("#646cff")
+  textColor       String  @default("#333333")
+  buttonColor     String  @default("#646cff")
+  backgroundColor String  @default("#ffffff")
+
+  createdAt  DateTime @default(now())
+}
+
+
+model Chest {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+  cost          Int
+  rarity        Rarity
+  type          ItemType @default(CHEST)
+  isInInventory Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model ColorDrop {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+  cost          Int
+  rarity        Rarity
+  type          ItemType @default(COLOR_DROP)
+
+  r             Int
+  g             Int
+  b             Int
+
+  isInInventory Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model Color {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+  cost          Int
+  rarity        Rarity
+  type          ItemType @default(COLOR)
+
+  r             Int
+  g             Int
+  b             Int
+
+  isInInventory Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+
+
 generator client {
   provider = "prisma-client-js"
 }
