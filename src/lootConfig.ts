@@ -1,4 +1,4 @@
-export const DROP_RANGES:any = {
+export const DROP_RANGES: Record<string, [number, number]> = {
   COMMON: [0,50],
   UNCOMMON: [51,100],
   RARE: [101,150],
