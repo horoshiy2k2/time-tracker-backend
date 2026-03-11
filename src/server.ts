@@ -813,24 +813,20 @@ app.delete("/inventory/clear-db", async (req, res) => {
 
 
 
-function rollFromTable(table:any){
+function rollFromTable(table: Record<string, number>): string {
+  const entries = Object.entries(table) as [string, number][];
 
-  const entries = Object.entries(table);
+  const total = entries.reduce((a, [, v]) => a + v, 0);
 
-  const total = entries.reduce((a,[,v]:any)=>a+v,0);
-
-  const roll = Math.random()*total;
+  const roll = Math.random() * total;
 
   let acc = 0;
 
-  for(const [key,value] of entries){
-
+  for (const [key, value] of entries) {
     acc += value;
-
-    if(roll <= acc){
+    if (roll <= acc) {
       return key;
     }
-
   }
 
   return entries[0][0];
