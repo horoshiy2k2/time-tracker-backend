@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
-import { CHEST_SETTINGS, DROP_RANGES } from "./lootConfig.ts";
+import { CHEST_SETTINGS, DROP_RANGES } from "./lootConfig";
 
 const prisma = new PrismaClient();
 const app = express();
