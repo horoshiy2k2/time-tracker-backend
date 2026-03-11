@@ -468,10 +468,8 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
       const rarity =
         rarityPool[Math.floor(Math.random()*rarityPool.length)];
 
-      const [min,max] = DROP_RANGES[rarity];
-
-      const value =
-        Math.floor(Math.random()*(max-min+1))+min;
+      const [min, max] = DROP_RANGES[rarity as keyof typeof DROP_RANGES]!;
+      const value = Math.floor(Math.random() * (max - min + 1)) + min;
 
       const channel =
         ["r","g","b"][Math.floor(Math.random()*3)];
