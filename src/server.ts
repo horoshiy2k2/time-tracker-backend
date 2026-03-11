@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Rarity } from "@prisma/client";
 import { CHEST_SETTINGS, DROP_RANGES } from "./lootConfig";
+
 
 const prisma = new PrismaClient();
 const app = express();
@@ -352,12 +353,14 @@ app.post("/inventory/color/mix", async (req, res) => {
 
     const colorCost = (COLOR_DROP_COST[rarity] || 1) * 3;
 
+
+    const rarityEnum: Rarity = rarity as Rarity; // приводим к enum
     // Создаём новый цвет
     const color = await prisma.color.create({
       data: {
         name: "Color",
         description: "Created from 3 color drops",
-        rarity,
+        rarity: rarityEnum,
         cost: colorCost,
         type: "COLOR",
         r,
@@ -479,11 +482,14 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
 
       const cost = COLOR_DROP_COST[rarity] || 1;
 
+
+      const rarityEnum: Rarity = rarity as Rarity;
+
       const drop = await prisma.colorDrop.create({
         data:{
           name:"Color Drop",
           description:"Generated from chest",
-          rarity,
+          rarity: rarityEnum,
           cost:cost,
           type:"COLOR_DROP",
           r,g,b,
@@ -535,13 +541,13 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
 
 
 
-
+      const rarityEnum: Rarity = rarity as Rarity; // приводим к enum
 
       const color = await prisma.color.create({
         data:{
           name:"Color",
           description:"Color for paint something",
-          rarity:rarity,
+          rarity:rarityEnum,
           cost: colorCost,
           type:"COLOR",
           r: rClamped,
@@ -570,11 +576,13 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
       const rarity =
         chestPool[Math.floor(Math.random()*chestPool.length)];
 
+      const rarityEnum: Rarity = rarity as Rarity; // приводим к enum
+      
       const newChest = await prisma.chest.create({
         data:{
           name:`${rarity} Chest`,
           description:"Found inside another chest",
-          rarity,
+          rarity: rarityEnum,
           cost:CHEST_COST[rarity],
           type:"CHEST",
           isInInventory:true
