@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { PrismaClient, Rarity } from "@prisma/client";
@@ -230,15 +231,6 @@ app.get("/stats", async (_, res) => {
     totalSeconds
   });
 });
-
-/* ---------- START SERVER ---------- */
-
-const PORT = process.env.PORT || 4000;
-
-app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
-});
-
 
 /* ---------- INVENTORY ---------- */
 
@@ -795,22 +787,28 @@ app.delete("/inventory/clear-db", async (req, res) => {
 });
 
 
+/* ---------- START SERVER ---------- */
 
+const PORT = process.env.PORT || 4000;
 
+async function startServer() {
+  if (!process.env.DATABASE_URL) {
+    console.error('DATABASE_URL is not set. Create .env from .env.example before starting backend.');
+    process.exit(1);
+  }
 
+  try {
+    await prisma.$connect();
+    app.listen(PORT, () => {
+      console.log(`Backend running on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    process.exit(1);
+  }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
+startServer();
 
 
 function rollFromTable(table: Record<string, number>): string {
