@@ -1,0 +1,2 @@
+ALTER TABLE "User"
+ADD COLUMN "darkThemeEnabled" BOOLEAN NOT NULL DEFAULT false;

@@ -687,7 +687,8 @@ app.post("/user/paint", async (req, res) => {
           progressColor: "#646cff",
           textColor: "#000000",
           buttonColor: "#646cff",
-          backgroundColor: "#ffffff"
+          backgroundColor: "#ffffff",
+          darkThemeEnabled: false
         }
       });
 
@@ -705,6 +706,7 @@ app.post("/user/paint", async (req, res) => {
         data: {
           backgroundColor: "#0f1115",
           textColor: "#e6e6e6",
+          darkThemeEnabled: true
         }
       });
 
@@ -756,17 +758,72 @@ app.post("/user/paint", async (req, res) => {
 });
 
 app.get("/user/theme", async (req, res) => {
-  const user = await prisma.user.findFirst();
+  let user = await prisma.user.findFirst();
 
   if (!user) {
     return res.status(404).json({ error: "User not found" });
+  }
+
+  // При загрузке темы: если тёмная тема выключена, не даём оставить чёрный фон.
+  if (!user.darkThemeEnabled && user.backgroundColor.toLowerCase() === "#0f1115") {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { backgroundColor: "#ffffff" }
+    });
   }
 
   res.json({
     progressColor: user.progressColor,
     textColor: user.textColor,
     buttonColor: user.buttonColor,
-    backgroundColor: user.backgroundColor
+    backgroundColor: user.backgroundColor,
+    darkThemeEnabled: user.darkThemeEnabled
+  });
+});
+
+app.get("/user/theme-mode", async (_, res) => {
+  const user = await prisma.user.findFirst();
+
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  res.json({ darkThemeEnabled: user.darkThemeEnabled });
+});
+
+app.post("/user/theme-mode", async (req, res) => {
+  const { enabled } = req.body;
+
+  if (typeof enabled !== "boolean") {
+    return res.status(400).json({ error: "enabled must be boolean" });
+  }
+
+  const user = await prisma.user.findFirst();
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      darkThemeEnabled: enabled,
+      ...(enabled
+        ? {
+            backgroundColor: "#0f1115",
+            textColor: "#e6e6e6",
+          }
+        : {
+            backgroundColor: "#ffffff",
+            textColor: "#000000",
+          }),
+    },
+  });
+
+  res.json({
+    message: "Theme mode updated",
+    darkThemeEnabled: updated.darkThemeEnabled,
+    backgroundColor: updated.backgroundColor,
+    textColor: updated.textColor,
   });
 });
 
@@ -830,4 +887,3 @@ function rollFromTable(table: Record<string, number>): string {
 
   return entries[0][0];
 }
-
