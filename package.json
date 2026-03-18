@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "prebuild": "node scripts/prisma-generate-safe.js",
     "build": "npx --yes tsc",
     "postinstall": "node scripts/prisma-generate-safe.js",
     "start": "npm run db:migrate && npm run build && node dist/server.js",

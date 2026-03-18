@@ -20,6 +20,7 @@ model User {
   textColor       String  @default("#333333")
   buttonColor     String  @default("#646cff")
   backgroundColor String  @default("#ffffff")
+  darkThemeEnabled Boolean @default(false)
 
   createdAt  DateTime @default(now())
 }
