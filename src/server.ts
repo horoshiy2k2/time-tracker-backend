@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { PrismaClient, Rarity } from "@prisma/client";
 import { CHEST_SETTINGS, DROP_RANGES } from "./lootConfig";
+import { getClosestColorName } from "./colorNames";
 
 
 const prisma = new PrismaClient();
@@ -350,7 +351,7 @@ app.post("/inventory/color/mix", async (req, res) => {
     // Создаём новый цвет
     const color = await prisma.color.create({
       data: {
-        name: "Color",
+        name: getClosestColorName({ r, g, b }),
         description: "Created from 3 color drops",
         rarity: rarityEnum,
         cost: colorCost,
@@ -477,7 +478,7 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
 
       const drop = await prisma.colorDrop.create({
         data:{
-          name:"Color Drop",
+          name:`${getClosestColorName({ r, g, b })} Drop`,
           description:"Generated from chest",
           rarity: rarityEnum,
           cost:cost,
@@ -535,7 +536,7 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
 
       const color = await prisma.color.create({
         data:{
-          name:"Color",
+          name:getClosestColorName({ r: rClamped, g: gClamped, b: bClamped }),
           description:"Color for paint something",
           rarity:rarityEnum,
           cost: colorCost,
@@ -829,5 +830,4 @@ function rollFromTable(table: Record<string, number>): string {
 
   return entries[0][0];
 }
-
 
