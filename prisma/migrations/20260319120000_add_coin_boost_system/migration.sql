@@ -1,14 +1,29 @@
--- AlterEnum
-ALTER TYPE "ItemType" ADD VALUE 'BOOST';
+-- AlterEnum (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'ItemType' AND e.enumlabel = 'BOOST'
+  ) THEN
+    ALTER TYPE "ItemType" ADD VALUE 'BOOST';
+  END IF;
+END $$;
 
--- CreateEnum
-CREATE TYPE "EffectType" AS ENUM ('COIN_X2_NEXT_SESSION', 'COIN_X2_TIMED');
+-- CreateEnum (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'EffectType') THEN
+    CREATE TYPE "EffectType" AS ENUM ('COIN_X2_NEXT_SESSION', 'COIN_X2_TIMED');
+  END IF;
+END $$;
 
 -- AlterTable
 ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "darkThemeEnabled" BOOLEAN NOT NULL DEFAULT false;
 
 -- CreateTable
-CREATE TABLE "BoostItem" (
+CREATE TABLE IF NOT EXISTS "BoostItem" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -28,7 +43,7 @@ CREATE TABLE "BoostItem" (
 );
 
 -- CreateTable
-CREATE TABLE "UserEffect" (
+CREATE TABLE IF NOT EXISTS "UserEffect" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "effectType" "EffectType" NOT NULL,
@@ -41,7 +56,7 @@ CREATE TABLE "UserEffect" (
 );
 
 -- CreateTable
-CREATE TABLE "ShopProduct" (
+CREATE TABLE IF NOT EXISTS "ShopProduct" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -62,16 +77,33 @@ CREATE TABLE "ShopProduct" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ShopProduct_slug_key" ON "ShopProduct"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "ShopProduct_slug_key" ON "ShopProduct"("slug");
 
 -- CreateIndex
-CREATE INDEX "UserEffect_userId_effectType_idx" ON "UserEffect"("userId", "effectType");
+CREATE INDEX IF NOT EXISTS "UserEffect_userId_effectType_idx" ON "UserEffect"("userId", "effectType");
 
 -- CreateIndex
-CREATE INDEX "UserEffect_expiresAt_idx" ON "UserEffect"("expiresAt");
+CREATE INDEX IF NOT EXISTS "UserEffect_expiresAt_idx" ON "UserEffect"("expiresAt");
 
--- AddForeignKey
-ALTER TABLE "BoostItem" ADD CONSTRAINT "BoostItem_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'BoostItem_userId_fkey'
+  ) THEN
+    ALTER TABLE "BoostItem"
+      ADD CONSTRAINT "BoostItem_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "UserEffect" ADD CONSTRAINT "UserEffect_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'UserEffect_userId_fkey'
+  ) THEN
+    ALTER TABLE "UserEffect"
+      ADD CONSTRAINT "UserEffect_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;

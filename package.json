@@ -31,8 +31,5 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^4.2.1",
     "ts-node-dev": "^2.0.0"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.js"
   }
 }
