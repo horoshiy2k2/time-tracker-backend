@@ -10,21 +10,29 @@ enum ItemType {
   CHEST
   COLOR_DROP
   COLOR
+  BOOST
+}
+
+enum EffectType {
+  COIN_X2_NEXT_SESSION
+  COIN_X2_TIMED
 }
 
 model User {
-  id         String   @id @default(uuid())
-  coins      Int      @default(0)
+  id                String      @id @default(uuid())
+  coins             Int         @default(0)
 
-  progressColor   String  @default("#646cff")
-  textColor       String  @default("#333333")
-  buttonColor     String  @default("#646cff")
-  backgroundColor String  @default("#ffffff")
-  darkThemeEnabled Boolean @default(false)
+  progressColor     String      @default("#646cff")
+  textColor         String      @default("#333333")
+  buttonColor       String      @default("#646cff")
+  backgroundColor   String      @default("#ffffff")
+  darkThemeEnabled  Boolean     @default(false)
 
-  createdAt  DateTime @default(now())
+  boostItems        BoostItem[]
+  effects           UserEffect[]
+
+  createdAt         DateTime    @default(now())
 }
-
 
 model Chest {
   id            String   @id @default(uuid())
@@ -69,7 +77,55 @@ model Color {
   createdAt     DateTime @default(now())
 }
 
+model BoostItem {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  description      String
+  rarity           Rarity
+  type             ItemType    @default(BOOST)
+  effectType       EffectType
+  multiplier       Int         @default(2)
+  isTimed          Boolean     @default(false)
+  minDurationHours Int?
+  maxDurationHours Int?
+  durationHours    Int?
+  isInInventory    Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+}
 
+model UserEffect {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  effectType    EffectType
+  expiresAt     DateTime?
+  durationHours Int?
+  rolledRarity  Rarity?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId, effectType])
+  @@index([expiresAt])
+}
+
+model ShopProduct {
+  id               String      @id @default(uuid())
+  slug             String      @unique
+  name             String
+  description      String
+  type             ItemType
+  effectType       EffectType?
+  rarity           Rarity
+  cost             Int
+  multiplier       Int?
+  isTimed          Boolean     @default(false)
+  minDurationHours Int?
+  maxDurationHours Int?
+  isActive         Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
 
 generator client {
   provider = "prisma-client-js"
@@ -90,7 +146,7 @@ model Category {
 
 model Session {
   id          String    @id @default(uuid())
-  categoryId  String?   // теперь может быть null
+  categoryId  String?
   category    Category? @relation(fields: [categoryId], references: [id])
   startTime   DateTime
   endTime     DateTime
