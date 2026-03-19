@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { PrismaClient, Rarity } from "@prisma/client";
+import { EffectType, PrismaClient, Rarity } from "@prisma/client";
 import { CHEST_SETTINGS, DROP_RANGES } from "./lootConfig";
 import { getClosestColorName } from "./colorNames";
 
@@ -26,12 +26,34 @@ const COLOR_DROP_COST: Record<string, number> = {
   LEGENDARY: 32,
 };
 
+const BOOST_COST = {
+  NEXT_SESSION_X2: 30,
+  TIMED_X2: 80,
+};
+
 //const COLOR_COST = 3;
 
 
 
 app.use(cors());
 app.use(express.json());
+
+async function getOrCreateUser() {
+  let user = await prisma.user.findFirst();
+  if (!user) {
+    user = await prisma.user.create({ data: { coins: 0 } });
+  }
+  return user;
+}
+
+async function removeExpiredEffects(userId: string) {
+  await prisma.userEffect.deleteMany({
+    where: {
+      userId,
+      expiresAt: { lte: new Date() },
+    },
+  });
+}
 
 /* ---------- CATEGORIES ---------- */
 
@@ -130,8 +152,20 @@ app.post("/current-session/stop", async (req, res) => {
 
     const now = new Date();
 
-    const durationSec = Math.floor(
-      (now.getTime() - current.startTime.getTime()) / 1000
+    const startedAtMs = new Date(current.startTime).getTime();
+    const createdAtMs = new Date(current.createdAt).getTime();
+
+    const durationFromStartSec = Number.isFinite(startedAtMs)
+      ? Math.floor((now.getTime() - startedAtMs) / 1000)
+      : 0;
+    const durationFromCreatedSec = Number.isFinite(createdAtMs)
+      ? Math.floor((now.getTime() - createdAtMs) / 1000)
+      : 0;
+
+    const durationSec = Math.max(
+      0,
+      durationFromStartSec,
+      durationFromCreatedSec
     );
 
     // Создаём полноценную сессию
@@ -150,22 +184,56 @@ app.post("/current-session/stop", async (req, res) => {
     });
 
     // Берём пользователя
-    const user = await prisma.user.findFirst();
-    if (!user) return res.status(400).json({ error: "User not found" });
+    const user = await getOrCreateUser();
+    await removeExpiredEffects(user.id);
 
-    // Начисляем монеты (целые числа)
-    const coinsEarned = Math.floor(durationSec / 600);
+    const activeEffects = await prisma.userEffect.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const baseCoinsEarned = Math.floor(durationSec / 600);
+    let multiplier = 1;
+    let consumedEffectId: string | null = null;
+
+    const oneSessionEffect = activeEffects.find(
+      (effect) => effect.effectType === EffectType.COIN_X2_NEXT_SESSION && (effect.chargesLeft ?? 0) > 0
+    );
+
+    const timedEffect = activeEffects.find(
+      (effect) => effect.effectType === EffectType.COIN_X2_TIMED && (!effect.expiresAt || effect.expiresAt > new Date())
+    );
+
+    if (oneSessionEffect) {
+      multiplier = Math.max(multiplier, oneSessionEffect.multiplier);
+      consumedEffectId = oneSessionEffect.id;
+    }
+
+    if (timedEffect) {
+      multiplier = Math.max(multiplier, timedEffect.multiplier);
+    }
+
+    const coinsEarned = Math.floor(baseCoinsEarned * multiplier);
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { coins: { increment: coinsEarned } },
     });
 
+    if (consumedEffectId) {
+      await prisma.userEffect.delete({
+        where: { id: consumedEffectId },
+      });
+    }
+
     res.json({
       success: true,
       durationSec,
+      baseCoinsEarned,
+      multiplier,
       coinsEarned,
       coinsTotal: updatedUser.coins,
+      consumedNextSessionBoost: Boolean(consumedEffectId),
     });
 
   } catch (err:any) {
@@ -236,6 +304,9 @@ app.get("/stats", async (_, res) => {
 /* ---------- INVENTORY ---------- */
 
 app.get("/inventory", async (_, res) => {
+  const user = await getOrCreateUser();
+  await removeExpiredEffects(user.id);
+
   const chests = await prisma.chest.findMany({
     where: { isInInventory: true }
   });
@@ -248,10 +319,21 @@ app.get("/inventory", async (_, res) => {
     where: { isInInventory: true }
   });
 
+  const boosts = await prisma.boostItem.findMany({
+    where: { isInInventory: true }
+  });
+
+  const activeEffects = await prisma.userEffect.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+
   res.json({
     chests,
     colorDrops,
-    colors
+    colors,
+    boosts,
+    activeEffects
   });
 });
 
@@ -300,6 +382,76 @@ app.post("/shop/buy-chest", async (req, res) => {
     res.json(chest);
   } catch (error) {
     console.error(error);  // чтобы видеть в консоли причину 500
+    res.status(500).json({ error: "Purchase failed" });
+  }
+});
+
+app.post("/shop/buy-coin-boost-next-session", async (_, res) => {
+  try {
+    const user = await getOrCreateUser();
+    const cost = BOOST_COST.NEXT_SESSION_X2;
+
+    if (user.coins < cost) {
+      return res.status(400).json({ error: "Not enough coins" });
+    }
+
+    const boost = await prisma.boostItem.create({
+      data: {
+        name: "Coin boost 1 session",
+        description: "x2 coins on the next completed timer session",
+        cost,
+        rarity: "RARE",
+        type: "BOOST",
+        boostKind: "COIN_X2_NEXT_SESSION",
+        isInInventory: true,
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        coins: { decrement: cost },
+      },
+    });
+
+    res.json(boost);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Purchase failed" });
+  }
+});
+
+app.post("/shop/buy-coin-boost-timed", async (_, res) => {
+  try {
+    const user = await getOrCreateUser();
+    const cost = BOOST_COST.TIMED_X2;
+
+    if (user.coins < cost) {
+      return res.status(400).json({ error: "Not enough coins" });
+    }
+
+    const boost = await prisma.boostItem.create({
+      data: {
+        name: "Coin boost 1-5h",
+        description: "Random x2 buff for 1-5 hours. 5h is legendary.",
+        cost,
+        rarity: "EPIC",
+        type: "BOOST",
+        boostKind: "COIN_X2_TIMED",
+        isInInventory: true,
+      },
+    });
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        coins: { decrement: cost },
+      },
+    });
+
+    res.json(boost);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Purchase failed" });
   }
 });
@@ -380,17 +532,30 @@ app.post("/inventory/color/mix", async (req, res) => {
 /* ---------- USER ---------- */
 
 app.get("/user", async (_, res) => {
-  let user = await prisma.user.findFirst();
+  const user = await getOrCreateUser();
+  await removeExpiredEffects(user.id);
 
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        coins: 0
-      }
-    });
-  }
+  const activeEffects = await prisma.userEffect.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
 
-  res.json(user);
+  res.json({
+    ...user,
+    activeEffects,
+  });
+});
+
+app.get("/user/effects", async (_, res) => {
+  const user = await getOrCreateUser();
+  await removeExpiredEffects(user.id);
+
+  const activeEffects = await prisma.userEffect.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  res.json(activeEffects);
 });
 
 
@@ -599,6 +764,88 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
 
 });
 
+app.post("/inventory/boost/activate/:id", async (req, res) => {
+  try {
+    const user = await getOrCreateUser();
+    await removeExpiredEffects(user.id);
+
+    const boost = await prisma.boostItem.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!boost || !boost.isInInventory) {
+      return res.status(400).json({ error: "Boost not in inventory" });
+    }
+
+    await prisma.boostItem.update({
+      where: { id: boost.id },
+      data: { isInInventory: false },
+    });
+
+    if (boost.boostKind === "COIN_X2_NEXT_SESSION") {
+      await prisma.userEffect.deleteMany({
+        where: {
+          userId: user.id,
+          effectType: "COIN_X2_NEXT_SESSION",
+        },
+      });
+
+      const effect = await prisma.userEffect.create({
+        data: {
+          userId: user.id,
+          effectType: "COIN_X2_NEXT_SESSION",
+          multiplier: 2,
+          chargesLeft: 1,
+        },
+      });
+
+      return res.json({
+        success: true,
+        activatedBoost: boost,
+        effect,
+      });
+    }
+
+    const randomHours = Math.floor(Math.random() * 5) + 1;
+    const expiresAt = new Date(Date.now() + randomHours * 60 * 60 * 1000);
+
+    await prisma.userEffect.deleteMany({
+      where: {
+        userId: user.id,
+        effectType: "COIN_X2_TIMED",
+      },
+    });
+
+    const effect = await prisma.userEffect.create({
+      data: {
+        userId: user.id,
+        effectType: "COIN_X2_TIMED",
+        multiplier: 2,
+        expiresAt,
+      },
+    });
+
+    const rarityByHours: Record<number, Rarity> = {
+      1: "COMMON",
+      2: "UNCOMMON",
+      3: "RARE",
+      4: "EPIC",
+      5: "LEGENDARY",
+    };
+
+    return res.json({
+      success: true,
+      activatedBoost: boost,
+      effect,
+      durationHours: randomHours,
+      rolledRarity: rarityByHours[randomHours],
+    });
+  } catch (err: any) {
+    console.error("Activate boost error:", err);
+    res.status(500).json({ error: "Boost activation failed", details: err.message });
+  }
+});
+
 
 
 app.post("/inventory/sell-item/:id", async (req, res) => {
@@ -617,7 +864,7 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
 
     // Попробуем найти предмет в каждой модели
     let item: any = await prisma.chest.findUnique({ where: { id } });
-    let itemType: "chest" | "colorDrop" | "color" = "chest";
+    let itemType: "chest" | "colorDrop" | "color" | "boost" = "chest";
 
     if (!item) {
       item = await prisma.colorDrop.findUnique({ where: { id } });
@@ -626,6 +873,10 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
     if (!item) {
       item = await prisma.color.findUnique({ where: { id } });
       itemType = "color";
+    }
+    if (!item) {
+      item = await prisma.boostItem.findUnique({ where: { id } });
+      itemType = "boost";
     }
 
     if (!item) return res.status(404).json({ error: "Item not found" });
@@ -638,6 +889,8 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
       await prisma.colorDrop.update({ where: { id }, data: { isInInventory: false } });
     } else if (itemType === "color") {
       await prisma.color.update({ where: { id }, data: { isInInventory: false } });
+    } else if (itemType === "boost") {
+      await prisma.boostItem.update({ where: { id }, data: { isInInventory: false } });
     }
 
     // Добавляем монеты пользователю только если sellValue > 0

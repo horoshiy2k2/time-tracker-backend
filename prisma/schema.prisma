@@ -10,6 +10,12 @@ enum ItemType {
   CHEST
   COLOR_DROP
   COLOR
+  BOOST
+}
+
+enum EffectType {
+  COIN_X2_NEXT_SESSION
+  COIN_X2_TIMED
 }
 
 model User {
@@ -23,6 +29,7 @@ model User {
   darkThemeEnabled Boolean @default(false)
 
   createdAt  DateTime @default(now())
+  effects    UserEffect[]
 }
 
 
@@ -67,6 +74,29 @@ model Color {
 
   isInInventory Boolean  @default(false)
   createdAt     DateTime @default(now())
+}
+
+model BoostItem {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+  cost          Int
+  rarity        Rarity
+  type          ItemType
+  boostKind     EffectType
+  isInInventory Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model UserEffect {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  effectType  EffectType
+  multiplier  Float      @default(2)
+  expiresAt   DateTime?
+  chargesLeft Int?
+  createdAt   DateTime   @default(now())
 }
 
 

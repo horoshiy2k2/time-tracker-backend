@@ -9,7 +9,8 @@
     "build": "npx --yes tsc",
     "postinstall": "node scripts/prisma-generate-safe.js",
     "start": "npm run db:migrate && npm run build && node dist/server.js",
-    "db:migrate": "prisma migrate deploy"
+    "db:migrate": "prisma migrate deploy",
+    "db:resolve:boost-migration-failed": "prisma migrate resolve --rolled-back 20260319110000_add_coin_boost_items_and_effects"
   },
   "keywords": [],
   "author": "",
