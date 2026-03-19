@@ -82,7 +82,7 @@ model BoostItem {
   description   String
   cost          Int
   rarity        Rarity
-  type          ItemType @default(BOOST)
+  type          ItemType
   boostKind     EffectType
   isInInventory Boolean  @default(false)
   createdAt     DateTime @default(now())

@@ -11,7 +11,7 @@ CREATE TABLE "BoostItem" (
     "description" TEXT NOT NULL,
     "cost" INTEGER NOT NULL,
     "rarity" "Rarity" NOT NULL,
-    "type" "ItemType" NOT NULL DEFAULT 'BOOST',
+    "type" "ItemType" NOT NULL,
     "boostKind" "EffectType" NOT NULL,
     "isInInventory" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
