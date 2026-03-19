@@ -180,7 +180,10 @@ app.post("/current-session/stop", async (req, res) => {
       orderBy: { createdAt: "asc" },
     });
 
-    const baseCoinsEarned = Math.floor(durationSec / 600);
+    const baseCoinsEarned =
+      durationSec > 0
+        ? Math.max(1, Math.floor(durationSec / 600))
+        : 0;
     let multiplier = 1;
     let consumedEffectId: string | null = null;
 
