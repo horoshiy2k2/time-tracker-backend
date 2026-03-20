@@ -83,6 +83,8 @@ datasource db {
 model Category {
   id              String           @id @default(uuid())
   name            String
+  multiplier      Float            @default(1.0)
+
   sessions        Session[]
   currentSessions CurrentSession[]   
   createdAt       DateTime         @default(now())
