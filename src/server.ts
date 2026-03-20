@@ -41,20 +41,30 @@ app.get("/categories", async (_, res) => {
 });
 
 app.post("/categories", async (req, res) => {
-  const { name } = req.body;
+  const { name, multiplier } = req.body;
+
   const category = await prisma.category.create({
-    data: { name },
+    data: {
+      name,
+      multiplier: multiplier ?? 1.0
+    },
   });
+
   res.json(category);
 });
 
 app.put("/categories/:id", async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, multiplier } = req.body;
 
     const updated = await prisma.category.update({
       where: { id: req.params.id },
-      data: { name },
+      data: {
+        name,
+        ...(multiplier !== undefined && {
+          multiplier: Number(multiplier)
+        })
+      },
     });
 
     res.json(updated);
@@ -153,8 +163,23 @@ app.post("/current-session/stop", async (req, res) => {
     const user = await prisma.user.findFirst();
     if (!user) return res.status(400).json({ error: "User not found" });
 
+
+    // Получаем категорию с multiplier
+    let multiplier = 1.0;
+
+    if (current.categoryId) {
+      const category = await prisma.category.findUnique({
+        where: { id: current.categoryId }
+      });
+
+      if (category) {
+        multiplier = category.multiplier;
+      }
+    }
+
     // Начисляем монеты (целые числа)
-    const coinsEarned = Math.floor(durationSec / 600);
+    const baseCoins = durationSec / 600;
+    const coinsEarned = Math.floor(baseCoins * multiplier);
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
@@ -166,6 +191,7 @@ app.post("/current-session/stop", async (req, res) => {
       durationSec,
       coinsEarned,
       coinsTotal: updatedUser.coins,
+      multiplier,
     });
 
   } catch (err:any) {
