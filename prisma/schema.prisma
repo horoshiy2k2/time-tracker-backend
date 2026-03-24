@@ -10,6 +10,7 @@ enum ItemType {
   CHEST
   COLOR_DROP
   COLOR
+  BOOST
 }
 
 model User {
@@ -21,6 +22,8 @@ model User {
   buttonColor     String  @default("#646cff")
   backgroundColor String  @default("#ffffff")
   darkThemeEnabled Boolean @default(false)
+  coinMultiplier      Float   @default(1.0)
+  coinMultiplierUntil DateTime?
 
   createdAt  DateTime @default(now())
 }
@@ -69,6 +72,21 @@ model Color {
   createdAt     DateTime @default(now())
 }
 
+model CoinBoost {
+  id            String   @id @default(uuid())
+  name          String
+  description   String
+
+  multiplier    Float    
+  durationMin   Int      
+
+  cost          Int
+  rarity        Rarity
+  type          ItemType
+
+  isInInventory Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
 
 
 generator client {
@@ -107,3 +125,4 @@ model CurrentSession {
   startTime  DateTime
   createdAt  DateTime @default(now())
 }
+

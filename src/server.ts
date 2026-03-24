@@ -165,7 +165,7 @@ app.post("/current-session/stop", async (req, res) => {
 
 
     // Получаем категорию с multiplier
-    let multiplier = 1.0;
+    let categoryMultiplier = 1.0;
 
     if (current.categoryId) {
       const category = await prisma.category.findUnique({
@@ -173,13 +173,21 @@ app.post("/current-session/stop", async (req, res) => {
       });
 
       if (category) {
-        multiplier = category.multiplier;
+        categoryMultiplier = category.multiplier;
       }
     }
 
+    // проверяем бафф
+    let buffMultiplier = 1.0;
+
+    if (user.coinMultiplierUntil && new Date(user.coinMultiplierUntil) > new Date()) {
+      buffMultiplier = user.coinMultiplier;
+    }
+
+
     // Начисляем монеты (целые числа)
     const baseCoins = durationSec / 600;
-    const coinsEarned = Math.floor(baseCoins * multiplier);
+    const coinsEarned = Math.floor(baseCoins * categoryMultiplier * buffMultiplier);
 
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
@@ -191,7 +199,8 @@ app.post("/current-session/stop", async (req, res) => {
       durationSec,
       coinsEarned,
       coinsTotal: updatedUser.coins,
-      multiplier,
+      categoryMultiplier,
+      buffMultiplier,
     });
 
   } catch (err:any) {
@@ -274,10 +283,18 @@ app.get("/inventory", async (_, res) => {
     where: { isInInventory: true }
   });
 
+  const boosts = await prisma.coinBoost.findMany({
+    where: { isInInventory: true }
+  });
+
+  const user = await prisma.user.findFirst();
+
   res.json({
     chests,
     colorDrops,
-    colors
+    colors,
+    boosts,
+    user
   });
 });
 
@@ -612,7 +629,101 @@ app.post("/inventory/chest/open/:id", async (req, res) => {
       });
     }
 
+
+    /* ---------- BOOST ---------- */
+
+    if (rewardType === "boost") {
+
+      const rarityPool = settings.allowedDropRarities; 
+
+      const boostPool = [
+        {
+          rarity: "COMMON",
+          multiplier: 1.5,
+          durationMin: getRandomInt(7, 13) * 10,
+        },
+        {
+          rarity: "UNCOMMON",
+          multiplier: 1.5,
+          durationMin: getRandomInt(13, 25) * 10,
+        },
+        {
+          rarity: "RARE",
+          multiplier: 2,
+          durationMin: getRandomInt(7, 25) * 10,
+        },
+        {
+          rarity: "RARE",
+          multiplier: 1.5,
+          durationMin: getRandomInt(25, 50) * 10,
+        },
+        {
+          rarity: "EPIC",
+          multiplier: 2,
+          durationMin: getRandomInt(25, 50) * 10,
+        },
+        {
+          rarity: "EPIC",
+          multiplier: 1.5,
+          durationMin: getRandomInt(12 * 6, 24 * 6) * 10,
+        },
+        {
+          rarity: "EPIC",
+          multiplier: 3,
+          durationMin: getRandomInt(7, 13) * 10,
+        },
+        {
+          rarity: "LEGENDARY",
+          multiplier: getRandomInt(3, 4),
+          durationMin: getRandomInt(12 * 6, 24 * 6) * 10,
+        }
+      ];
+
+      const filteredPool = boostPool.filter(b =>
+        rarityPool.includes(b.rarity)
+      );
+
+      const poolToUse = filteredPool.length > 0 ? filteredPool : boostPool;
+
+      const config =
+        poolToUse[Math.floor(Math.random() * poolToUse.length)];
+
+        const cost = calculateBoostCost(
+          config.durationMin,
+          config.multiplier,
+          config.rarity
+        );
+
+      const rarityEnum: Rarity = config.rarity as Rarity;
+
+      const boost = await prisma.coinBoost.create({
+        data: {
+          name: `Coin Boost x${config.multiplier} (${Math.floor(config.durationMin / 60)}h)`,
+          description: `Gives x${config.multiplier} coins for ${config.durationMin} minutes`,
+          multiplier: config.multiplier,
+          durationMin: config.durationMin,
+          cost,
+          rarity: rarityEnum,
+          type: "BOOST",
+          isInInventory: true
+        }
+      });
+
+      rewards.push({
+        ...boost,
+        itemType: "boost"
+      });
+    }
+
+
+
+
   }
+
+
+
+
+
 
   await prisma.chest.update({
     where:{id:chest.id},
@@ -643,7 +754,7 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
 
     // Попробуем найти предмет в каждой модели
     let item: any = await prisma.chest.findUnique({ where: { id } });
-    let itemType: "chest" | "colorDrop" | "color" = "chest";
+    let itemType = "chest";
 
     if (!item) {
       item = await prisma.colorDrop.findUnique({ where: { id } });
@@ -652,6 +763,11 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
     if (!item) {
       item = await prisma.color.findUnique({ where: { id } });
       itemType = "color";
+    }
+
+    if (!item) {
+      item = await prisma.coinBoost.findUnique({ where: { id } });
+      itemType = "boost";
     }
 
     if (!item) return res.status(404).json({ error: "Item not found" });
@@ -664,6 +780,8 @@ app.post("/inventory/sell-item/:id", async (req, res) => {
       await prisma.colorDrop.update({ where: { id }, data: { isInInventory: false } });
     } else if (itemType === "color") {
       await prisma.color.update({ where: { id }, data: { isInInventory: false } });
+    } else if (itemType === "boost") {
+      await prisma.coinBoost.update({ where: { id }, data: { isInInventory: false } });
     }
 
     // Добавляем монеты пользователю только если sellValue > 0
@@ -871,6 +989,125 @@ app.delete("/inventory/clear-db", async (req, res) => {
 });
 
 
+
+// app.post("/inventory/use-coin-multiplier", async (req, res) => {
+//   try {
+//     const { multiplier, durationMinutes } = req.body;
+
+//     const user = await prisma.user.findFirst();
+//     if (!user) return res.status(400).json({ error: "User not found" });
+
+//     const now = new Date();
+//     const until = new Date(now.getTime() + durationMinutes * 60 * 1000);
+
+//     const updated = await prisma.user.update({
+//       where: { id: user.id },
+//       data: {
+//         coinMultiplier: multiplier,
+//         coinMultiplierUntil: until
+//       }
+//     });
+
+//     res.json({
+//       message: "Buff activated",
+//       multiplier,
+//       until
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Failed to activate buff" });
+//   }
+// });
+
+
+
+app.post("/api/generate-coin-boost", async (req, res) => {
+  try {
+    const {
+      multiplier = 2,
+      durationMin = 240,
+      rarity = "RARE",
+      cost = 30
+    } = req.body;
+
+
+
+    const rarityEnum: Rarity = rarity as Rarity; // приводим к enum
+    const boost = await prisma.coinBoost.create({
+      data: {
+        name: `Coin Boost x${multiplier} (${durationMin}min)`,
+        description: `Gives x${multiplier} coins for ${durationMin} minutes`,
+        multiplier,
+        durationMin,
+        cost,
+        rarity: rarityEnum,
+        type: "BOOST", 
+        isInInventory: true
+      }
+    });
+
+    res.json(boost);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to generate boost" });
+  }
+});
+
+
+app.post("/inventory/use-coin-boost/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const boost = await prisma.coinBoost.findUnique({
+      where: { id }
+    });
+
+    if (!boost || !boost.isInInventory) {
+      return res.status(400).json({ error: "Boost not found" });
+    }
+
+    const user = await prisma.user.findFirst();
+    if (!user) return res.status(400).json({ error: "User not found" });
+
+    const now = new Date();
+    const until = new Date(now.getTime() + boost.durationMin * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        coinMultiplier: boost.multiplier,
+        coinMultiplierUntil: until
+      }
+    });
+
+    await prisma.coinBoost.update({
+      where: { id },
+      data: { isInInventory: false }
+    });
+
+    res.json({
+      success: true,
+      multiplier: boost.multiplier,
+      until
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to use boost" });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
 /* ---------- START SERVER ---------- */
 
 const PORT = process.env.PORT || 4000;
@@ -912,4 +1149,34 @@ function rollFromTable(table: Record<string, number>): string {
   }
 
   return entries[0][0];
+}
+
+
+function getRandomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
+function calculateBoostCost(
+  durationMin: number,
+  multiplier: number,
+  rarity?: string
+): number {
+
+  const baseCoins = durationMin / 10;
+
+  const profit = baseCoins * (multiplier - 1);
+
+  // баланс по редкости
+  let balanceFactor = 0.65;
+
+  if (rarity === "COMMON") balanceFactor = 0.55;
+  if (rarity === "UNCOMMON") balanceFactor = 0.6;
+  if (rarity === "RARE") balanceFactor = 0.65;
+  if (rarity === "EPIC") balanceFactor = 0.7;
+  if (rarity === "LEGENDARY") balanceFactor = 0.75;
+
+  const cost = profit * balanceFactor;
+
+  return Math.max(1, Math.round(cost));
 }
