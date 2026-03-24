@@ -14,7 +14,8 @@ export const CHEST_SETTINGS:any = {
     lootTable:{
       colorDrop:93,
       chest:2,
-      color:5
+      color:5,
+      boost: 3
     },
 
     allowedDropRarities:["COMMON","UNCOMMON"]
@@ -24,9 +25,10 @@ export const CHEST_SETTINGS:any = {
     items:[2,5],
 
     lootTable:{
-      colorDrop:90,
+      colorDrop:85,
       chest:3,
-      color:7
+      color:7,
+      boost: 5
     },
 
     allowedDropRarities:["COMMON","UNCOMMON","RARE"]
@@ -38,7 +40,8 @@ export const CHEST_SETTINGS:any = {
     lootTable:{
       colorDrop:86,
       chest:4,
-      color:10
+      color:10,
+      boost: 7
     },
 
     allowedDropRarities:["COMMON","UNCOMMON","RARE","EPIC"]
@@ -48,9 +51,10 @@ export const CHEST_SETTINGS:any = {
     items:[2,4],
 
     lootTable:{
-      colorDrop:86,
+      colorDrop:79,
       chest:4,
-      color:10
+      color:10,
+      boost: 7
     },
 
     allowedDropRarities:["RARE","EPIC","LEGENDARY"]
@@ -60,9 +64,10 @@ export const CHEST_SETTINGS:any = {
     items:[5,10],
 
     lootTable:{
-      colorDrop:70,
+      colorDrop:63,
       chest:5,
-      color:25
+      color:25,
+      boost: 7
     },
 
     allowedDropRarities:["EPIC","LEGENDARY"]
